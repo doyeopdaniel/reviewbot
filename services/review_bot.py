@@ -85,8 +85,10 @@ class ReviewBot:
         # 응답 생성
         response = self.response_generator.generate_response(review, category)
         
-        # 캐시에 저장
-        self.response_cache[cache_key] = response.dict()
+        # 캐시에 저장 (카테고리 정보 포함)
+        cache_data = response.dict()
+        cache_data['category'] = category  # 카테고리 정보 추가
+        self.response_cache[cache_key] = cache_data
         self._save_response_cache()
         
         return response
@@ -134,23 +136,110 @@ class ReviewBot:
         # 국가별 통계
         country_stats = {}
         category_stats = {}
+        platform_stats = {}
+        daily_stats = {}
+        response_times = []
         
         for cache_key, response_data in self.response_cache.items():
             country = response_data.get('country', 'Unknown')
+            platform = response_data.get('platform', 'Unknown')
+            category = response_data.get('category', 'Unknown')
+            generated_at = response_data.get('generated_at', '')
             
+            # 국가별 통계
             if country not in country_stats:
                 country_stats[country] = 0
             country_stats[country] += 1
+            
+            # 카테고리별 통계
+            if category not in category_stats:
+                category_stats[category] = 0
+            category_stats[category] += 1
+            
+            # 플랫폼별 통계
+            if platform not in platform_stats:
+                platform_stats[platform] = 0
+            platform_stats[platform] += 1
+            
+            # 일별 통계 (최근 7일)
+            if generated_at:
+                try:
+                    date_str = generated_at.split('T')[0]  # YYYY-MM-DD 형태로 추출
+                    if date_str not in daily_stats:
+                        daily_stats[date_str] = 0
+                    daily_stats[date_str] += 1
+                except:
+                    pass
         
-        # 벡터 저장소 상태
+        # 벡터 저장소 상태 및 문서 수
+        vector_store_info = {}
         existing_stores = self._check_existing_vector_stores()
         
-        return {
-            "total_responses": total_responses,
-            "country_distribution": country_stats,
-            "vector_stores": existing_stores,
-            "last_updated": datetime.now().isoformat()
+        for store in existing_stores:
+            try:
+                # 벡터 저장소 로드하여 문서 수 확인
+                if hasattr(self.vector_store_service, 'get_document_count'):
+                    doc_count = self.vector_store_service.get_document_count(store)
+                else:
+                    doc_count = "Unknown"
+                
+                vector_store_info[store] = {
+                    "loaded": True,
+                    "document_count": doc_count
+                }
+            except:
+                vector_store_info[store] = {
+                    "loaded": False,
+                    "document_count": 0
+                }
+        
+        # 성능 통계
+        performance_stats = {
+            "cache_hit_rate": f"{(len(self.response_cache) / max(total_responses, 1) * 100):.1f}%" if total_responses > 0 else "0%",
+            "avg_response_length": self._calculate_avg_response_length(),
+            "total_cache_size": f"{self._get_cache_file_size():.2f} MB"
         }
+        
+        return {
+            "총 생성된 응답": total_responses,
+            "국가별 분포": country_stats,
+            "카테고리별 분포": category_stats,
+            "플랫폼별 분포": platform_stats,
+            "일별 처리량 (최근)": dict(sorted(daily_stats.items(), reverse=True)[:7]),
+            "벡터 저장소 상태": vector_store_info,
+            "성능 지표": performance_stats,
+            "마지막 업데이트": datetime.now().isoformat(),
+            "시스템 상태": {
+                "캐시 파일 존재": os.path.exists("response_cache.json"),
+                "벡터 저장소 경로": Config.VECTOR_STORE_PATH,
+                "지원 국가": Config.COUNTRIES,
+                "지원 카테고리": Config.REVIEW_CATEGORIES
+            }
+        }
+    
+    def _calculate_avg_response_length(self) -> float:
+        """평균 응답 길이 계산"""
+        if not self.response_cache:
+            return 0.0
+        
+        total_length = 0
+        count = 0
+        
+        for response_data in self.response_cache.values():
+            response_text = response_data.get('response_text', '')
+            if response_text:
+                total_length += len(response_text)
+                count += 1
+        
+        return total_length / count if count > 0 else 0.0
+    
+    def _get_cache_file_size(self) -> float:
+        """캐시 파일 크기 (MB)"""
+        cache_file = "response_cache.json"
+        if os.path.exists(cache_file):
+            size_bytes = os.path.getsize(cache_file)
+            return size_bytes / (1024 * 1024)  # MB로 변환
+        return 0.0
     
     def _generate_cache_key(self, review: Review) -> str:
         """캐시 키 생성"""

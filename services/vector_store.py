@@ -127,4 +127,51 @@ class VectorStoreService:
                     "loaded": False,
                     "document_count": 0
                 }
-        return info 
+        return info
+    
+    def get_document_count(self, country: str) -> int:
+        """특정 국가의 벡터 저장소 문서 수 반환"""
+        if country not in self.vector_stores:
+            # 저장소가 로드되지 않은 경우 로드 시도
+            self.load_existing_store(country)
+        
+        if country in self.vector_stores:
+            try:
+                store = self.vector_stores[country]
+                if hasattr(store, 'index') and hasattr(store.index, 'ntotal'):
+                    return store.index.ntotal
+                elif hasattr(store, 'docstore') and hasattr(store.docstore, '_dict'):
+                    return len(store.docstore._dict)
+                else:
+                    return 0
+            except Exception as e:
+                print(f"문서 수 조회 오류 ({country}): {e}")
+                return 0
+        
+        return 0
+    
+    def get_all_countries_info(self) -> dict:
+        """모든 국가의 벡터 저장소 상세 정보"""
+        info = {}
+        
+        # 로드된 저장소 정보
+        for country, store in self.vector_stores.items():
+            info[country] = {
+                "loaded": True,
+                "document_count": self.get_document_count(country),
+                "store_type": type(store).__name__,
+                "embedding_model": Config.EMBEDDING_MODEL
+            }
+        
+        # 파일 시스템에 있지만 로드되지 않은 저장소 확인
+        if os.path.exists(Config.VECTOR_STORE_PATH):
+            for item in os.listdir(Config.VECTOR_STORE_PATH):
+                if item.endswith('_faiss'):
+                    country = item.replace('_faiss', '')
+                    if country not in info:
+                        info[country] = {
+                            "loaded": False,
+                            "document_count": "Not loaded",
+                            "store_type": "FAISS",
+                            "embedding_model": Config.EMBEDDING_MODEL
+                        } 
