@@ -1,6 +1,6 @@
 from typing import Dict
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from config import Config
 from models.review import Review
 
@@ -9,7 +9,7 @@ class ReviewClassifier:
     
     def __init__(self):
         self.llm = ChatOpenAI(
-            model=Config.LLM_MODEL,
+            model_name=Config.LLM_MODEL,
             api_key=Config.OPENAI_API_KEY,
             temperature=0
         )

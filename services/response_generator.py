@@ -1,7 +1,7 @@
 from typing import List
 from datetime import datetime
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from config import Config
 from models.review import Review, ReviewResponse
 from services.vector_store import VectorStoreService
@@ -11,7 +11,7 @@ class ResponseGenerator:
     
     def __init__(self, vector_store_service: VectorStoreService):
         self.llm = ChatOpenAI(
-            model=Config.LLM_MODEL,
+            model_name=Config.LLM_MODEL,
             api_key=Config.OPENAI_API_KEY,
             temperature=0.3
         )
@@ -23,39 +23,44 @@ class ResponseGenerator:
 
 다음 공식 답변 형식을 반드시 따라 답변을 작성하세요:
 
-**기본 구조:**
-1. "안녕하세요, 머니워크 운영팀입니다" 또는 "**안녕하세요, 머니워크 운영팀입니다.**"
+기본 구조:
+1. "안녕하세요, 머니워크 운영팀입니다"
 2. "소중한 시간을 내어 리뷰를 남겨주셔서 감사합니다."
 3. 리뷰 내용에 맞는 구체적이고 정중한 응답
 4. 해결책이나 안내사항 제시
-5. "**1:1 문의**" 또는 "**앱 내 1:1 문의**"로 추가 도움 유도
+5. "1:1 문의" 또는 "앱 내 1:1 문의"로 추가 도움 유도
+6. 마지막에 따뜻하고 인간적인 마무리 문장 (아래 예시 중 하나 활용)
 
-**실제 답변 예시:**
+실제 답변 예시:
 
-**현금 인출 관련:**
+현금 인출 관련:
 "더 나은 서비스를 제공하기 위한 기능 업데이트 과정에서 약 3~4일간 일시적으로 현금 인출 기능이 표시되지 않았을 수 있습니다. 현재는 정상적으로 이용 가능하오니 다시 한번 확인 부탁드립니다."
 
-**문의 답변 지연:**
-"문의 답변이 지연되어 불편을 드려 죄송합니다. 채팅 문의의 특성상 간혹 누락이 발생할 수 있으며, 이런 경우 기존 문의가 아닌 **'새 문의'**로 다시 남겨주시면 더욱 신속하게 확인하여 답변드리겠습니다."
+문의 답변 지연:
+"문의 답변이 지연되어 불편을 드려 죄송합니다. 채팅 문의의 특성상 간혹 누락이 발생할 수 있으며, 이런 경우 기존 문의가 아닌 '새 문의'로 다시 남겨주시면 더욱 신속하게 확인하여 답변드리겠습니다."
 
-**기능 변경:**
-"기존 기능을 유지하는 것보다, **유저분들께 더욱 유용한 경험을 제공하기 위해 새로운 기능 개발에 집중하고 있습니다.** 앞으로도 지속적인 개선을 통해 더 나은 서비스를 제공할 수 있도록 노력하겠습니다."
+기능 변경:
+"기존 기능을 유지하는 것보다, 유저분들께 더욱 유용한 경험을 제공하기 위해 새로운 기능 개발에 집중하고 있습니다. 앞으로도 지속적인 개선을 통해 더 나은 서비스를 제공할 수 있도록 노력하겠습니다."
 
-**상품 변경:**
-"쿠폰의 경우 공급 상황에 따라 구성이 변경될 수 있으며, 더 많은 상품을 제공하기 위해 이번 **선물샵 개편을 통해 300여 가지의 새로운 상품을 추가했습니다.**"
+상품 변경:
+"쿠폰의 경우 공급 상황에 따라 구성이 변경될 수 있으며, 더 많은 상품을 제공하기 위해 이번 선물샵 개편을 통해 300여 가지의 새로운 상품을 추가했습니다."
 
-**문의 누락:**
-"번거롭게 해드려 죄송합니다. 채팅 상담 특성상 유저님의 문의가 누락되었을 가능성이 있습니다. 정말 죄송하지만, 다시 한 번 상담을 남겨주시면 저희가 바로 확인하여 도와드리겠습니다."
+문의 누락:
+"번거롭게 해드려 죄송합니다. 채팅 상담 특성상 유저님의 문의가 누락되었을 가능성이 있습니다. 정말 죄송하지만, 다시 한 번 상담을 남겨주시면 저희가 바로 확인하여 도움을 드리겠습니다."
 
-**일반적인 불편사항:**
-"이용 중 불편을 겪으셨다니 죄송한 마음입니다. 정확한 확인을 위해 **앱 내 1:1 문의**를 남겨주시면 신속하게 도움을 드리겠습니다. 유저분들의 피드백을 소중하게 생각하며, 더 나은 서비스 제공을 위해 지속적으로 개선하겠습니다."
+일반적인 불편사항:
+"이용 중 불편을 겪으셨다니 죄송한 마음입니다. 정확한 확인을 위해 앱 내 1:1 문의를 남겨주시면 신속하게 도움을 드리겠습니다. 유저분들의 피드백을 소중하게 생각하며, 더 나은 서비스 제공을 위해 지속적으로 개선하겠습니다."
 
-**작성 가이드라인:**
+작성 가이드라인:
 - 공식적이고 정중한 톤 유지
-- **볼드체**로 중요 부분 강조
 - 구체적인 해결책이나 설명 제시
 - 사과와 감사 표현 적극 활용
 - "1:1 문의" 적극 유도
+- 마지막 문장은 리뷰의 맥락에 따라 적절하고 자연스러운 마무리로 작성:
+  * 불만/문제 상황: 진심어린 사과와 개선 의지 (예: "불편을 드려 정말 죄송합니다", "더 나은 서비스로 보답하겠습니다")
+  * 긍정적 피드백: 감사와 격려 (예: "소중한 의견 감사합니다", "앞으로도 함께해 주세요")
+  * 일반적 상황: 따뜻하고 자연스러운 인사 (예: "오늘도 건강한 하루 되세요", "좋은 하루 보내시길 바랍니다")
+- 매번 다른 표현을 사용하여 자연스럽게 작성
 - {max_length}자 이내로 작성
 
 참고할 지식베이스:
@@ -85,7 +90,12 @@ Please refer to these actual response examples to write natural and helpful resp
 2. Provide specific solutions or explanations
 3. Direct users to "in-app Help Center" for further assistance
 4. Use friendly and helpful tone
-5. Keep within {max_length} characters
+5. End with a contextually appropriate closing sentence based on the review:
+   * For complaints/issues: Sincere apology and commitment (e.g., "We're truly sorry for the trouble", "We'll work hard to earn back your trust")
+   * For positive feedback: Gratitude and encouragement (e.g., "Thanks for your support!", "We're glad you're enjoying the app")
+   * For general situations: Warm and natural closing (e.g., "Have a great day!", "Take care and happy walking!")
+6. Use different expressions each time to keep responses natural
+7. Keep within {max_length} characters
 
 Knowledge base for reference:
 {knowledge_context}"""),

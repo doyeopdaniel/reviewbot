@@ -11,7 +11,7 @@ class Config:
     EMBEDDING_MODEL = "text-embedding-3-small"
     
     # LLM 모델 설정
-    LLM_MODEL = "gpt-4o-mini"  # 비용 효율적인 모델 사용
+    LLM_MODEL = "gpt-4o"  # 최신 GPT-4o 모델
     
     # 문서 수집 URL (한국/미국만)
     KNOWLEDGE_BASE_URLS = {
