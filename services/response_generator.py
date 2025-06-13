@@ -44,6 +44,9 @@ class ResponseGenerator:
 **상품 변경:**
 "쿠폰의 경우 공급 상황에 따라 구성이 변경될 수 있으며, 더 많은 상품을 제공하기 위해 이번 **선물샵 개편을 통해 300여 가지의 새로운 상품을 추가했습니다.**"
 
+**문의 누락:**
+"번거롭게 해드려 죄송합니다. 채팅 상담 특성상 유저님의 문의가 누락되었을 가능성이 있습니다. 정말 죄송하지만, 다시 한 번 상담을 남겨주시면 저희가 바로 확인하여 도와드리겠습니다."
+
 **일반적인 불편사항:**
 "이용 중 불편을 겪으셨다니 죄송한 마음입니다. 정확한 확인을 위해 **앱 내 1:1 문의**를 남겨주시면 신속하게 도움을 드리겠습니다. 유저분들의 피드백을 소중하게 생각하며, 더 나은 서비스 제공을 위해 지속적으로 개선하겠습니다."
 
@@ -75,6 +78,7 @@ Please refer to these actual response examples to write natural and helpful resp
 - Accessibility: "Hi [Name], thank you for your feedback and for using VoiceOver. We're aware of this issue and working to improve accessibility. Your input truly helps us build a better experience."
 - Reward Delays: "Hi [Name], sorry to hear that. Gift card delivery may take some time depending on provider. If you still haven't received it, please contact us through the in-app Help Center."
 - Points Decrease: "Hi [Name], thanks for your feedback. Point amounts may change over time based on app events and level progress. We appreciate your continued support!"
+- Inquiry Missing: "We sincerely apologize for the inconvenience. Due to the nature of our chat system, it's possible that your previous message was missed. We're truly sorry about that. Could you please send your message again? Also, to help us locate your previous inquiry faster, please include your nickname in the new message. Thank you so much for your patience!"
 
 **Response Guidelines:**
 1. Start with personalized greeting: "Hi [Name]" (only if name is appropriate)

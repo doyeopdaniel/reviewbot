@@ -152,6 +152,15 @@ def main():
             rating=5,
             created_at=datetime.now()
         ),
+        Review(
+            id="kr_inquiry_001",
+            content="문의했는데 답변이 없어요. 채널톡으로도 연락했는데 응답이 없습니다.",
+            author="정사용자",
+            platform="google_play", 
+            country="KR",
+            rating=1,
+            created_at=datetime.now()
+        ),
         # 미국 케이스들
         Review(
             id="us_step_001",
@@ -187,6 +196,15 @@ def main():
             platform="app_store",
             country="US",
             rating=3,
+            created_at=datetime.now()
+        ),
+        Review(
+            id="us_inquiry_001",
+            content="I contacted support through the app but haven't received any response. I also tried the chat but no one replied.",
+            author="SarahJ",
+            platform="google_play",
+            country="US",
+            rating=1,
             created_at=datetime.now()
         )
     ]
