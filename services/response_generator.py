@@ -1,10 +1,12 @@
-"""4~5점 긍정 리뷰 응답 생성 서비스"""
+"""테넌트 주입형 리뷰 응답 생성 서비스 (내친소 lite / 머니워크 premium)"""
 
 import logging
 import random
 from datetime import datetime
-from langchain_openai import ChatOpenAI
+
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
 from config import Config
 from models.review import Review, ReviewResponse
 
@@ -12,131 +14,104 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseGenerator:
-    """긍정 리뷰 감사 응답 생성"""
+    """리뷰 응답 생성 (테넌트 yaml 기반)"""
 
-    PERSONAS = ["다니엘", "제리"]
+    def __init__(self, tenant_config: dict | None = None):
+        cfg = (tenant_config or Config.TENANT_CONFIG)["response_generator"]
+        self.cfg = cfg
+        self.personas: list[str] = cfg["personas"]
+        self.greeting_template: str = cfg["greeting_template"]
+        self.fallback_response: str = cfg["fallback_response"]
 
-    SHORT_REVIEW_RESPONSES = [
-        "좋은 리뷰 남겨주셔서 감사합니다! 앞으로도 좋은 만남을 이어갈 수 있도록 노력하겠습니다.",
-        "리뷰 남겨주셔서 감사합니다! 더 좋은 인연을 만들어갈 수 있도록 최선을 다하겠습니다.",
-        "소중한 리뷰 감사드립니다! 앞으로도 내친소와 함께 좋은 인연 만나시길 바랍니다.",
-        "응원해주셔서 감사합니다! 앞으로도 신뢰할 수 있는 소개팅 경험을 드리겠습니다.",
-        "리뷰 감사합니다! 좋은 만남이 이어지길 응원합니다.",
-        "좋은 평가 감사합니다! 더 나은 서비스로 보답할 수 있도록 하겠습니다.",
-        "따뜻한 리뷰 감사합니다! 앞으로도 좋은 인연의 시작이 되도록 노력하겠습니다.",
-    ]
+        self.short_review_cfg = cfg.get("short_review", {"enabled": False})
+        self.sarcasm_cfg = cfg.get("sarcasm_filter", {"enabled": False})
+        self.classifier_cfg = cfg.get("classifier", {"enabled": False})
 
-    SHORT_REVIEW_KEYWORDS = {"좋아요", "굿", "추천", "드가자", "좋음", "최고", "굿굿", "별다섯개", "강추"}
-
-    # 5점인데 비꼬는/부정적 리뷰를 감지하는 키워드
-    SARCASM_KEYWORDS = {
-        "최악", "별로", "쓰레기", "삭제", "환불", "사기", "짜증", "불만", "실망",
-        "후회", "비추", "거지", "망", "쓸모없", "못쓰", "형편없", "개별로",
-        "돈아까", "돈 아까", "시간낭비", "시간 낭비", "아깝", "노답",
-        "그지같", "지우", "탈퇴", "개쓰레기", "헛소리",
-    }
-
-    def __init__(self):
         self.llm = ChatOpenAI(
             model_name=Config.LLM_MODEL,
             api_key=Config.OPENAI_API_KEY,
             temperature=0.7,
         )
 
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """당신은 내친소(Naechinso) 소개팅 앱의 운영 팀원 {persona}입니다.
-내친소는 친구가 추천해주는 신뢰 기반 소개팅/데이팅 앱입니다.
-4~5점 긍정 리뷰에 대해 감사하고 앞으로도 이용 부탁드린다는 응답을 작성합니다.
+        messages = [("system", cfg["system_prompt"])]
+        for shot in cfg.get("few_shots", []):
+            messages.append(("human", shot["human"]))
+            messages.append(("assistant", shot["assistant"]))
 
-**필수 규칙:**
-- 반드시 "안녕하세요, 내친소 운영 팀원 {persona}입니다"로 시작
-- 리뷰 내용 중 구체적으로 언급한 부분을 1개 이상 반영
-- 감사 표현 + 앞으로 이용 부탁 마무리
-- 자연스럽고 진심어린 톤, 과한 리액션 금지
-- 관찰/분석적 어투 금지: "~군요", "~네요", "~으시네요" 등 사용 금지
-- 볼드 텍스트(**) 사용 금지
-- 200자 이내 간결하게 작성
-- 매번 다른 표현 사용 (같은 문장 반복 금지)
+        if self.classifier_cfg.get("enabled"):
+            messages.append((
+                "human",
+                "리뷰 카테고리: {category}\n리뷰 내용: {review_content}",
+            ))
+        else:
+            messages.append(("human", "리뷰 내용: {review_content}"))
 
-**감사 표현 예시 (다양하게 섞어서):**
-- "말씀해주신 부분이 팀에도 큰 힘이 됩니다"
-- "이렇게 좋은 리뷰 남겨주셔서 감사합니다"
-- "내친소를 이용해주셔서 정말 감사합니다"
-- "소중한 리뷰 감사드립니다"
+        self.prompt = ChatPromptTemplate.from_messages(messages)
 
-**마무리 표현 예시 (다양하게 섞어서):**
-- "앞으로도 좋은 만남을 이어갈 수 있도록 노력하겠습니다"
-- "더 좋은 인연을 만들어갈 수 있도록 최선을 다하겠습니다"
-- "앞으로도 내친소와 함께 좋은 인연 만나시길 바랍니다"
-- "앞으로도 신뢰할 수 있는 소개팅 경험을 드리겠습니다"
-- "좋은 만남이 이어지길 응원합니다"
-"""),
-
-            ("human", "친구가 소개해줘서 시작했는데 진짜 좋은 사람 만났어요!"),
-            ("assistant", "안녕하세요, 내친소 운영 팀원 다니엘입니다. 친구 소개를 통해 좋은 만남으로 이어지셨다니 정말 감사합니다! 앞으로도 신뢰할 수 있는 소개팅 경험을 드릴 수 있도록 노력하겠습니다."),
-
-            ("human", "다른 소개팅 앱보다 훨씬 믿음이 가요. 추천합니다"),
-            ("assistant", "안녕하세요, 내친소 운영 팀원 제리입니다. 내친소의 신뢰 기반 매칭에 만족해주셔서 감사합니다! 앞으로도 좋은 인연을 만들어갈 수 있도록 최선을 다하겠습니다."),
-
-            ("human", "드가자"),
-            ("assistant", "안녕하세요, 내친소 운영 팀원 제리입니다. 좋은 리뷰 남겨주셔서 감사합니다! 앞으로도 좋은 만남을 이어갈 수 있도록 노력하겠습니다."),
-
-            ("human", "UI도 깔끔하고 매칭 퀄리티가 좋아요"),
-            ("assistant", "안녕하세요, 내친소 운영 팀원 다니엘입니다. UI와 매칭 퀄리티에 대해 좋게 평가해주셔서 팀에도 큰 힘이 됩니다. 앞으로도 더 나은 서비스로 보답하겠습니다."),
-
-            ("human", "리뷰 내용: {review_content}"),
-        ])
+    def _greet(self, persona: str) -> str:
+        return self.greeting_template.format(persona=persona)
 
     def _is_short_review(self, content: str) -> bool:
-        """짧고 내용 없는 리뷰인지 판별"""
+        sr = self.short_review_cfg
+        if not sr.get("enabled"):
+            return False
         stripped = content.strip().rstrip(".!~ㅋㅎ")
-        if len(stripped) <= 10 and any(kw in stripped for kw in self.SHORT_REVIEW_KEYWORDS):
+        keywords = sr.get("keywords", [])
+        if (
+            len(stripped) <= sr.get("max_length_with_keyword", 10)
+            and any(kw in stripped for kw in keywords)
+        ):
             return True
-        if len(stripped) <= 5:
+        if len(stripped) <= sr.get("max_length_no_keyword", 5):
             return True
         return False
 
     def _is_sarcastic(self, content: str) -> bool:
-        """5점이지만 비꼬는/부정적 리뷰인지 판별"""
-        return any(kw in content for kw in self.SARCASM_KEYWORDS)
+        sf = self.sarcasm_cfg
+        if not sf.get("enabled"):
+            return False
+        return any(kw in content for kw in sf.get("keywords", []))
 
-    def generate_response(self, review: Review, category: str = "칭찬") -> ReviewResponse | None:
-        """긍정 리뷰 응답 생성. 비꼬는 리뷰는 None 반환."""
-        # 비꼬는 리뷰 스킵
+    def _build_short_response(self, review: Review) -> ReviewResponse:
+        persona = random.choice(self.personas)
+        body = random.choice(self.short_review_cfg["responses"])
+        text = f"{self._greet(persona)} {body}"
+        return ReviewResponse(
+            review_id=review.id,
+            response_text=text,
+            generated_at=datetime.now(),
+            country=review.country,
+            platform=review.platform,
+            used_sources=[],
+        )
+
+    def generate_response(
+        self,
+        review: Review,
+        category: str = "칭찬",
+    ) -> ReviewResponse | None:
+        """리뷰 응답 생성. 비꼬는 리뷰는 None."""
         if self._is_sarcastic(review.content):
             logger.info(f"비꼬는 리뷰 스킵: {review.id} - {review.content[:30]}")
             return None
 
-        # 짧은 리뷰는 고정 후보에서 랜덤 선택 (LLM 호출 안 함)
         if self._is_short_review(review.content):
-            persona = random.choice(self.PERSONAS)
-            response_text = (
-                f"안녕하세요, 내친소 운영 팀원 {persona}입니다. "
-                f"{random.choice(self.SHORT_REVIEW_RESPONSES)}"
-            )
             logger.info(f"짧은 리뷰 고정 응답: {review.id}")
-            return ReviewResponse(
-                review_id=review.id,
-                response_text=response_text,
-                generated_at=datetime.now(),
-                country=review.country,
-                platform=review.platform,
-                used_sources=[],
-            )
+            return self._build_short_response(review)
 
         try:
-            persona = random.choice(self.PERSONAS)
+            persona = random.choice(self.personas)
             chain = self.prompt | self.llm
-            result = chain.invoke({
+            invoke_kwargs = {
                 "review_content": review.content,
                 "persona": persona,
-            })
-            response_text = result.content.strip()
+                "max_length": Config.MAX_RESPONSE_LENGTH.get(review.platform, 350),
+            }
+            if self.classifier_cfg.get("enabled"):
+                invoke_kwargs["category"] = category
+            result = chain.invoke(invoke_kwargs)
+            response_text = result.content.strip().replace("**", "")
 
-            # 마크다운 제거
-            response_text = response_text.replace("**", "")
-
-            # 길이 제한
             max_length = Config.MAX_RESPONSE_LENGTH.get(review.platform, 350)
             if len(response_text) > max_length:
                 response_text = self._truncate(response_text, max_length)
@@ -152,18 +127,18 @@ class ResponseGenerator:
 
         except Exception as e:
             logger.error(f"응답 생성 오류: {e}")
-            fallback_persona = random.choice(self.PERSONAS)
+            persona = random.choice(self.personas)
             return ReviewResponse(
                 review_id=review.id,
-                response_text=f"안녕하세요, 내친소 운영 팀원 {fallback_persona}입니다. 소중한 리뷰 감사드립니다! 앞으로도 좋은 만남을 이어갈 수 있도록 노력하겠습니다.",
+                response_text=f"{self._greet(persona)} {self.fallback_response}",
                 generated_at=datetime.now(),
                 country=review.country,
                 platform=review.platform,
                 used_sources=[],
             )
 
-    def _truncate(self, text: str, max_length: int) -> str:
-        """문장 단위로 자르기"""
+    @staticmethod
+    def _truncate(text: str, max_length: int) -> str:
         sentences = text.split(".")
         result = ""
         for s in sentences:
@@ -171,4 +146,4 @@ class ResponseGenerator:
                 result += s + "."
             else:
                 break
-        return result.strip() if result else text[:max_length - 3] + "..."
+        return result.strip() if result else text[: max_length - 3] + "..."

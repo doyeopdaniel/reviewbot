@@ -60,7 +60,6 @@ test_*.py
 *.p8
 *service-account*.json
 *service_account*.json
-config.py
 
 # CSV 데이터 파일들
 *.csv

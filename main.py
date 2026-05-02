@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-내친소 리뷰 응답 자동화 시스템
-4~5점 긍정 리뷰에 감사 응답 전용 (한국)
+"""멀티테넌트 리뷰 응답 자동화 시스템 (내친소 / 머니워크)
+
+테넌트는 환경변수 TENANT로 선택 (기본: naechinso).
 """
 
 import logging
@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def filter_positive_reviews(reviews: list[Review]) -> list[Review]:
-    """4~5점 리뷰만 필터링"""
+    """테넌트의 MIN_RATING 이상 리뷰만 필터링"""
     positive = [r for r in reviews if r.rating >= Config.MIN_RATING]
     filtered_count = len(reviews) - len(positive)
     if filtered_count:
-        logger.info(f"{filtered_count}개 리뷰 제외 (4점 미만)")
+        logger.info(f"{filtered_count}개 리뷰 제외 ({Config.MIN_RATING}점 미만)")
     return positive
 
 
@@ -186,7 +186,10 @@ def print_results(reviews, responses):
 def main():
     """메인"""
     print("=" * 50)
-    print("🤖 내친소 리뷰봇 (한국 4~5점 긍정 리뷰 전용)")
+    print(
+        f"🤖 {Config.DISPLAY_NAME} 리뷰봇 "
+        f"(plan={Config.PLAN}, rating>={Config.MIN_RATING})"
+    )
     print("=" * 50)
 
     bot = ReviewBot()
