@@ -124,55 +124,120 @@ class AppStoreConnectClient:
         
         return response["data"][0]["id"]
     
-    def get_reviews(self, country: str, limit: int = 200, skip_replied: bool = True) -> List[Review]:
-        """앱 리뷰 조회. skip_replied=True면 미답변 리뷰만 반환."""
+    def get_reviews(
+        self,
+        country: str,
+        limit: int = 200,
+        skip_replied: bool = True,
+        since_days: Optional[int] = None,
+    ) -> List[Review]:
+        """앱 리뷰 조회. skip_replied=True면 미답변 리뷰만 반환.
+
+        - since_days: 지정 시 해당 일수 이내의 리뷰만 반환 (예: 180 = 최근 6개월)
+        - limit이 200을 초과하면 자동으로 페이지네이션
+        """
         app_id = self.get_app_id(country)
 
-        # 답변 여부 확인을 위해 response 관계 포함
+        page_size = 200
         params = {
             "filter[territory]": country,
             "sort": "-createdDate",
-            "limit": min(limit, 200),
+            "limit": page_size,
             "fields[customerReviews]": "rating,title,body,createdDate,territory,response",
             "fields[customerReviewResponses]": "responseBody,state,lastModifiedDate",
             "include": "response",
         }
 
         endpoint = f"/v1/apps/{app_id}/customerReviews"
-        response = self._make_request(endpoint, params=params)
+        cutoff = (
+            datetime.now().astimezone() - timedelta(days=since_days)
+            if since_days
+            else None
+        )
 
-        # 이미 답변된 리뷰 ID 수집
-        replied_ids = set()
-        if skip_replied:
-            for included in response.get("included", []):
-                if included.get("type") == "customerReviewResponses":
-                    rel = included.get("relationships", {})
-                    review_rel = rel.get("review", {}).get("data", {})
-                    if review_rel.get("id"):
-                        replied_ids.add(review_rel["id"])
-            # relationships에서도 확인
+        reviews: List[Review] = []
+        replied_skipped = 0
+        out_of_window = 0
+        pages_fetched = 0
+        next_url: Optional[str] = None
+        stop_paging = False
+
+        while len(reviews) < limit and not stop_paging:
+            if next_url:
+                token = self._generate_jwt_token()
+                resp = requests.get(
+                    next_url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                response = resp.json()
+            else:
+                response = self._make_request(endpoint, params=params)
+
+            pages_fetched += 1
+
+            # 답변 ID 수집 (이번 페이지)
+            replied_ids = set()
+            if skip_replied:
+                for included in response.get("included", []):
+                    if included.get("type") == "customerReviewResponses":
+                        rel = included.get("relationships", {})
+                        review_rel = rel.get("review", {}).get("data", {})
+                        if review_rel.get("id"):
+                            replied_ids.add(review_rel["id"])
+                for review_data in response.get("data", []):
+                    resp_rel = (
+                        review_data.get("relationships", {})
+                        .get("response", {})
+                        .get("data")
+                    )
+                    if resp_rel is not None:
+                        replied_ids.add(review_data["id"])
+
             for review_data in response.get("data", []):
-                resp_rel = review_data.get("relationships", {}).get("response", {}).get("data")
-                if resp_rel is not None:
-                    replied_ids.add(review_data["id"])
+                if skip_replied and review_data["id"] in replied_ids:
+                    replied_skipped += 1
+                    continue
 
-        reviews = []
-        for review_data in response.get("data", []):
-            if skip_replied and review_data["id"] in replied_ids:
-                continue
+                attributes = review_data.get("attributes", {})
+                created_at = datetime.fromisoformat(
+                    attributes.get("createdDate", "").replace("Z", "+00:00")
+                )
 
-            attributes = review_data.get("attributes", {})
+                # 정렬이 -createdDate이므로, 컷오프보다 옛날이면 이후 리뷰도 모두 옛날
+                if cutoff and created_at < cutoff:
+                    out_of_window += 1
+                    stop_paging = True
+                    break
 
-            review = Review(
-                id=review_data["id"],
-                author="익명",
-                rating=attributes.get("rating", 0),
-                content=f"{attributes.get('title', '')} {attributes.get('body', '')}".strip(),
-                created_at=datetime.fromisoformat(attributes.get("createdDate", "").replace("Z", "+00:00")),
-                country=country,
-                platform="app_store"
-            )
-            reviews.append(review)
+                review = Review(
+                    id=review_data["id"],
+                    author="익명",
+                    rating=attributes.get("rating", 0),
+                    content=f"{attributes.get('title', '')} {attributes.get('body', '')}".strip(),
+                    created_at=created_at,
+                    country=country,
+                    platform="app_store",
+                )
+                reviews.append(review)
+
+                if len(reviews) >= limit:
+                    stop_paging = True
+                    break
+
+            next_url = response.get("links", {}).get("next")
+            if not next_url:
+                break
+
+        print("📊 App Store 리뷰 수집 통계:")
+        print(f"   - 조회한 페이지: {pages_fetched}개")
+        print(f"   - 답변 있어서 제외: {replied_skipped}개")
+        if since_days:
+            print(f"   - 기간({since_days}일) 밖이라 제외: {out_of_window}개")
+        print(f"   - 최종 수집된 리뷰: {len(reviews)}개")
 
         return reviews
     

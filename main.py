@@ -107,13 +107,14 @@ def process_google_play_reviews(bot: ReviewBot):
         logger.error(f"처리 중 오류: {e}")
 
 
-def process_app_store_reviews(bot: ReviewBot):
+def process_app_store_reviews(bot: ReviewBot, limit: int = 100, since_days: int | None = None):
     """실제 App Store 4~5점 리뷰 처리 (한국)"""
     try:
         as_client = AppStoreConnectClient()
 
-        print("\n📥 한국 App Store 미답변 리뷰 가져오는 중...")
-        reviews = as_client.get_reviews("KOR", limit=100)
+        window_msg = f" (최근 {since_days}일)" if since_days else ""
+        print(f"\n📥 한국 App Store 미답변 리뷰 가져오는 중...{window_msg}")
+        reviews = as_client.get_reviews("KOR", limit=limit, since_days=since_days)
 
         if not reviews:
             print("❌ 가져온 리뷰가 없습니다.")
